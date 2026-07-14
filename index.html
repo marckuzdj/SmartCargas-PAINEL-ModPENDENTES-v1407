@@ -608,7 +608,7 @@
     
     <!-- Subtítulo / Versão do Painel (Texto Cinza e Discreto abaixo da logo) -->
     <p class="brand-subtitle" style="margin: 0; padding: 0; font-size: 0.875rem; color: #6E6E73; font-weight: 500; letter-spacing: 0.3px;">
-        PAINEL ADMINISTRATIVO vModPENDENTES_1407.7
+        PAINEL ADMINISTRATIVO vModPENDENTES_1407.8
     </p>
 
 </div>
@@ -1973,10 +1973,10 @@ function fecharSubModalDetalhes() {
 }
 
 /**
- * GERADOR ATÔMICO DE RELATÓRIO UNIFICADO: EXPORTA ABAS 'ROMANEIOS' E 'DETALHADO' NO MESMO ARQUIVO CSV
+ * GERADOR ATÔMICO DE RELATÓRIO UNIFICADO: EXPORTA ABAS 'ROMANEIOS', 'DETALHADO' E 'PENDENTES' NO MESMO ARQUIVO CSV
  */
 function executarExportacaoCSVNativa() {
-  console.log("[CSV] Iniciando compilação unificada das abas ROMANEIOS e DETALHADO...");
+  console.log("[CSV] Iniciando compilação unificada das abas ROMANEIOS, DETALHADO e PENDENTES...");
 
   if (!CACHE_DADOS_CSV_MIGRACAO || CACHE_DADOS_CSV_MIGRACAO.length === 0) {
     alert("⚠️ Não existem romaneios carregados no modal para gerar a exportação.");
@@ -1998,8 +1998,9 @@ function executarExportacaoCSVNativa() {
     btnCsv.innerHTML = originalText;
 
     if (resposta && resposta.success) {
-      const listaRom = resposta.dadosRomaneios || [];
-      const listaDet = resposta.dadosDetalhado || [];
+      // 🚀 ADAPTAÇÃO CIRÚRGICA: Captura os dados do lote unificado gerado pelo novo back-end
+      const listaRom = resposta.dadosRomaneios || CACHE_DADOS_CSV_MIGRACAO || [];
+      const listaDet = resposta.dados || []; // Puxa o array unificado (Contendo DETALHADO + PENDENTES)
       let linhasCSVGeral = [];
       
       const formatarCelulaCSV = (valor) => {
@@ -2015,16 +2016,21 @@ function executarExportacaoCSVNativa() {
       linhasCSVGeral.push("=== SEÇÃO 1: RESUMO GERENCIAL ===");
       linhasCSVGeral.push([
         "NumROM", "TTPedidos", "TTVol", "Operador", "Transp", 
-        "Conferencia", "OBS", "ENDERECO", "ASSINATURA", "STATUS", "INTERCORRENCIAS", "EVIDENCIAS", "DT_IMPORT", "UF"
+        "Conferencia", "OBS", "ENDERECO", "ASSINATURA", "STATUS", "INTERCORRENCIAS", "EVIDENCIAS", "DT_IMPORT", "UF", "ORIGEM_ESTEIRA"
       ].join(";"));
 
       listaRom.forEach(linha => {
+        // Identifica dinamicamente a origem baseado no status do romaneio mestre
+        const ehConcluido = linha.status && linha.status.toString().toUpperCase().includes('CONCLUIDO');
+        const origemMestre = (ehConcluido || linha.origemDados === "DETALHADO") ? "DETALHADO" : "PENDENTES";
+
         linhasCSVGeral.push([
           formatarCelulaCSV(linha.numRomaneio), formatarCelulaCSV(linha.pedidos), formatarCelulaCSV(linha.volumes),
           formatarCelulaCSV(linha.operador), formatarCelulaCSV(linha.transp), formatarCelulaCSV(linha.conferencia),
           formatarCelulaCSV(linha.obs), formatarCelulaCSV(linha.endereco), formatarCelulaCSV(linha.assinatura),
           formatarCelulaCSV(linha.status), formatarCelulaCSV(linha.intercorrencias), formatarCelulaCSV(linha.evidencias),
-		  formatarCelulaCSV(linha.dtImport || "N/A"), formatarCelulaCSV(linha.uf || ufAtiva)
+          formatarCelulaCSV(linha.dtImport || "N/A"), formatarCelulaCSV(linha.uf || ufAtiva),
+          formatarCelulaCSV(origemMestre) // 🚀 Rastreabilidade na Seção 1
         ].join(";"));
       });
 
@@ -2033,22 +2039,23 @@ function executarExportacaoCSVNativa() {
       linhasCSVGeral.push("");
       
       // ===================================================================
-      // SEÇÃO B: COMPONENTES DA ESTEIRA - ABAS 'DETALHADO'
+      // SEÇÃO B: COMPONENTES DA ESTEIRA - UNIFICAÇÃO 'DETALHADO' E 'PENDENTES'
       // ===================================================================
-      linhasCSVGeral.push("=== SEÇÃO 2: DETALHAMENTO DE LEITURAS (100% CONCLUÍDOS) ===");
-		 linhasCSVGeral.push([
-		 "ROMANEIO", "OV", "FORNEC_CROSS", "NF_CROSS", "FORNEC_LAST", 
-		 "NF_LAST", "VOLUMES", "CONFERENTE", "DATA_CONFERENCIA", "DATA_OPERADOR"
-		 ].join(";"));
+      linhasCSVGeral.push("=== SEÇÃO 2: DETALHAMENTO DE LEITURAS EM ESTEIRA (CONCLUÍDOS E PENDENTES) ===");
+      linhasCSVGeral.push([
+        "ROMANEIO", "OV", "FORNEC_CROSS", "NF_CROSS", "FORNEC_LAST", 
+        "NF_LAST", "VOLUMES", "CONFERENTE", "DATA_CONFERENCIA", "DATA_OPERADOR", "ORIGEM_DADOS" // 🚀 ADICIONADA COLUNA ORIGEM
+      ].join(";"));
 
       listaDet.forEach(linha => {
         linhasCSVGeral.push([
           formatarCelulaCSV(linha.romaneio), formatarCelulaCSV(linha.ov), formatarCelulaCSV(linha.fornecCross),
           formatarCelulaCSV(linha.nfCross), formatarCelulaCSV(linha.fornecLast), formatarCelulaCSV(linha.nfLast),
           formatarCelulaCSV(linha.volumes), formatarCelulaCSV(linha.conferente), formatarCelulaCSV(linha.dataConf || "N/A"),
-		  formatarCelulaCSV(linha.dataOperador || "N/A") // 🚀 INJETADO
-	  ].join(";"));
-	  });
+          formatarCelulaCSV(linha.dataOperador || "N/A"),
+          formatarCelulaCSV(linha.tipoOrigem || "N/A") // 🚀 INJEÇÃO CIRÚRGICA: Informa se a leitura veio da DETALHADO ou PENDENTES
+        ].join(";"));
+      });
 
       // EMBUTIMENTO DE UTF-8 BOM CONTRA QUEBRA DE ACENTOS NO EXCEL
       const conteudoCSVCompleto = linhasCSVGeral.join("\n");
@@ -2066,7 +2073,7 @@ function executarExportacaoCSVNativa() {
       document.body.appendChild(linkDownload);
       linkDownload.click();
       document.body.removeChild(linkDownload);
-      console.log(`[CSV] Relatório unificado gerado com sucesso.`);
+      console.log(`[CSV] Relatório unificado gerado com sucesso contendo bipes pendentes e detalhados.`);
 
     } else {
       alert("❌ Falha de rede ao compilar pacote unificado: " + (resposta.error || "Erro de timeout."));
@@ -2086,6 +2093,7 @@ function executarExportacaoCSVNativa() {
   scriptExportLoteTag.onload = function() { if (scriptExportLoteTag.parentNode) document.body.removeChild(scriptExportLoteTag); };
   document.body.appendChild(scriptExportLoteTag);
 }
+
 
 
  /**
