@@ -608,7 +608,7 @@
     
     <!-- Subtítulo / Versão do Painel (Texto Cinza e Discreto abaixo da logo) -->
     <p class="brand-subtitle" style="margin: 0; padding: 0; font-size: 0.875rem; color: #6E6E73; font-weight: 500; letter-spacing: 0.3px;">
-        PAINEL ADMINISTRATIVO vModPENDENTES_1407.1
+        PAINEL ADMINISTRATIVO vModPENDENTES_1407.2
     </p>
 
 </div>
@@ -1729,14 +1729,41 @@ function executarExtracaoRelatorioBase(event) {
 
             const tr = document.createElement("tr");
             
-            // 🚀 ESCANEAMENTO POR SUFIXO: Vasculha a string de status completa em busca do termo mestre
-            const ehConcluidoPorSufixo = linha.status && linha.status.toString().toUpperCase().indexOf('CONCLUIDO') !== -1;
+            // =========================================================================
+            // INJEÇÃO CIRÚRGICA: NOVA LOGICA DE DIRECIONAMENTO DINÂMICO DE LINKS (DETALHADO / PENDENTES)
+            // =========================================================================
+            const ehConcluidoPorSufixo = linha.status && linha.status.toString().toUpperCase().includes('CONCLUIDO');
             
-            // 🎯 GATILHO SELETIVO: Libera a tag <a> roxa apenas se bater o match de encerramento
-            const linkOuTextoRomaneio = ehConcluidoPorSufixo 
-              ? `<a href="#" style="color: #8A05BE; font-weight: 700; text-decoration: underline;" onclick="solicitarBipesFilhosDetalahed('${linha.numRomaneio || celulaRomaneio}', event)">${celulaRomaneio}</a>`
-              : `<span style="color: #1D1D1F; font-weight: 500;">${celulaRomaneio}</span>`;
+            let linkOuTextoRomaneio = "";
+            let linkOuTextoStatus = "";
+            const celulaRomaneioRaw = linha.numRomaneio || "N/A";
+            const celulaStatusRaw = linha.status || "PENDENTE";
 
+            if (ehConcluidoPorSufixo || linha.origemDados === "DETALHADO") {
+              // 🟢 SE FOR CONCLUÍDO: Número do Romaneio é texto puro, Status ganha o link para a aba DETALHADO
+              linkOuTextoRomaneio = `<span style="color: #1D1D1F; font-weight: 500;">${celulaRomaneioRaw}</span>`;
+              linkOuTextoStatus = `<a href="#" style="color: #8A05BE; font-weight: 700; text-decoration: underline; cursor: pointer;" 
+                                      onclick="solicitarBipesFilhosDetalahed('${celulaRomaneioRaw}', 'DETALHADO', event)" 
+                                      title="Clique para abrir detalhes da carga concluída">
+                                      ${celulaStatusRaw}
+                                   </a>`;
+            } else {
+              // 🟡 SE NÃO FOR CONCLUÍDO (Pendentes/Parciais): Número do Romaneio vira o link para a aba PENDENTES, Status vira texto puro
+              linkOuTextoRomaneio = `<a href="#" style="color: #8A05BE; font-weight: 700; text-decoration: underline; cursor: pointer;" 
+                                        onclick="solicitarBipesFilhosDetalahed('${celulaRomaneioRaw}', 'PENDENTES', event)" 
+                                        title="Clique para ver os bipes pendentes desta carga">
+                                        ${celulaRomaneioRaw}
+                                     </a>`;
+              
+              // Define a cor do texto do status mantendo o padrão visual do seu projeto (Amarelo para parcial, Vermelho para pendente)
+              const corStatusTexto = linha.status && linha.status.indexOf('PARCIAL') !== -1 ? '#FFCC00' : '#FF3B30';
+              linkOuTextoStatus = `<span style="font-weight: 700; color: ${corStatusTexto};">${celulaStatusRaw}</span>`;
+            }
+
+            const tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid #E5E5EA";
+
+            // Injeta as novas variáveis dinâmicas na primeira coluna (Romaneio) e na décima coluna (Status)
             tr.innerHTML = `
               <td style="text-align: center; vertical-align: middle;">${linkOuTextoRomaneio}</td>
               <td>${linha.pedidos || 0}</td>
@@ -1747,14 +1774,11 @@ function executarExtracaoRelatorioBase(event) {
               <td>${linha.obs || "N/A"}</td>
               <td>${linha.endereco || "N/A"}</td>
               <td>${tratarCelulaImagem(linha.assinatura)}</td>
-			  <td style="font-weight: 700; color: ${
-				    linha.status && linha.status.indexOf('CONCLUIDO') !== -1 ? '#34C759' : 
-				    (linha.status && linha.status.indexOf('PARCIAL') !== -1 ? '#FFCC00' : '#FF3B30')
-				};">${linha.status || "PENDENTE"}</td>
+              <td style="vertical-align: middle;">${linkOuTextoStatus}</td> <!-- 🚀 STATUS DINÂMICO INJETADO -->
               <td>${linha.intercorrencias || "N/A"}</td>
               <td>${tratarCelulaImagem(linha.evidencias)}</td>
-              <td>${linha.dtImport || "N/A"}</td> <!-- 🚀 🎯 INJEÇÃO CIRÚRGICA DA COLUNA DT_IMPORT -->
-              <td style="font-weight: bold; text-align: center;">${selectedUF}</td> <!-- 🎯 Injeção Dinâmica da UF na Tabela -->
+              <td>${linha.dtImport || "N/A"}</td>
+              <td style="font-weight: bold; text-align: center;">${selectedUF}</td>
             `;
             hCorpo.appendChild(tr);
           });
@@ -1929,10 +1953,11 @@ function solicitarBipesFilhosDetalahed(numRomaneio, event) {
     delete window[callbackSubName];
   };
 
-  // Dispara a requisição para a nova action que criamos no back-end regional
+  // 2. Substitua o bloco de montagem da URL por este trecho atualizado:
   const urlSubBusca = ENDPOINT_REGIONAL_ATIVO + 
     "?action=extrairBipesFilhosDetalhados" + 
     "&romaneio=" + encodeURIComponent(numRomaneio) + 
+    "&origem=" + encodeURIComponent(origem) + // <--- INJEÇÃO CIRÚRGICA: Passa a aba alvo dinamicamente para o back-end
     "&callback=" + callbackSubName;
 
   const scriptSubTag = document.createElement("script");
